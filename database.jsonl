@@ -1,0 +1,45 @@
+{
+  "text_id": "1",
+  "text": "The patient is a 65-year-old male with a history of hypertension, type 2 diabetes, and chronic kidney disease who was admitted for chest pain. On admission, vital signs showed blood pressure of 170/95 mmHg and heart rate of 102 bpm. ECG demonstrated ST elevations in the anterior leads. The patient was diagnosed with acute anterior STEMI and underwent urgent cardiac catheterization with successful stent placement in the LAD. Post-procedure, he was managed in the ICU for 2 days and later transferred to the step-down unit. He was treated with aspirin, clopidogrel, atorvastatin, and metoprolol. Kidney function was monitored closely, and no worsening was observed. He was discharged in stable condition with follow-up scheduled in cardiology and nephrology clinics.",
+  "problems_diagnoses": ["hypertension", "type 2 diabetes", "chronic kidney disease", "chest pain", "acute anterior STEMI"],
+  "physical_exams_vital_signs": ["blood pressure of 170/95 mmHg", "heart rate of 102 bpm"],
+  "findings": ["ECG demonstrated ST elevations in the anterior leads"],
+  "medications": ["aspirin", "clopidogrel", "atorvastatin", "metoprolol"],
+  "medical_procedures": ["cardiac catheterization with successful stent placement in the LAD"]
+}
+{
+  "text_id": "2",
+  "text": "A 72-year-old female with COPD and heart failure was admitted due to worsening shortness of breath and productive cough. On arrival, she was tachypneic with oxygen saturation of 86% on room air. Chest X-ray revealed right lower lobe pneumonia. She was started on IV antibiotics and supplemental oxygen. Her symptoms improved after 3 days of therapy, and she was transitioned to oral antibiotics. She was discharged on home oxygen and instructed to follow up with pulmonology.",
+  "problems_diagnoses": ["COPD", "heart failure", "shortness of breath", "productive cough", "pneumonia"],
+  "physical_exams_vital_signs": ["tachypneic", "oxygen saturation of 86% on room air"],
+  "findings": ["Chest X-ray revealed right lower lobe pneumonia"],
+  "medications": ["IV antibiotics", "oral antibiotics"],
+  "medical_procedures": []
+}
+{
+  "text_id": "3",
+  "text": "The patient, a 45-year-old male with no significant past medical history, presented with acute onset of severe abdominal pain. Abdominal CT showed appendicitis with localized perforation. He was taken to the OR for laparoscopic appendectomy. Post-operatively, he was treated with IV fluids and antibiotics. Pain was controlled with acetaminophen and oxycodone. He recovered well and was discharged home on post-op day 2.",
+  "problems_diagnoses": ["appendicitis", "localized perforation", "abdominal pain"],
+  "physical_exams_vital_signs": [],
+  "findings": ["Abdominal CT showed appendicitis with localized perforation"],
+  "medications": ["IV fluids", "antibiotics", "acetaminophen", "oxycodone"],
+  "medical_procedures": ["laparoscopic appendectomy"]
+}
+{
+  "text_id": "4",
+  "text": "A 58-year-old male with atrial fibrillation and a mechanical mitral valve presented for routine anticoagulation management. INR was noted to be subtherapeutic at 1.5. He was given a dose of IV heparin and transitioned back to warfarin. No signs of thromboembolic events were noted. He was discharged once INR reached 2.5 with close outpatient monitoring planned.",
+  "problems_diagnoses": ["atrial fibrillation", "mechanical mitral valve", "subtherapeutic INR"],
+  "physical_exams_vital_signs": [],
+  "findings": [],
+  "medications": ["IV heparin", "warfarin"],
+  "medical_procedures": []
+}
+{
+  "text_id": "5",
+  "text": "A 39-year-old woman with a history of migraine presented with a severe headache unresponsive to home medications. Neurologic exam was normal. MRI of the brain showed no acute abnormalities. She received IV fluids, sumatriptan, and antiemetics in the ED, with significant improvement. She was observed for 24 hours and discharged home with neurology follow-up.",
+  "problems_diagnoses": ["migraine", "severe headache"],
+  "physical_exams_vital_signs": [],
+  "findings": ["MRI of the brain showed no acute abnormalities"],
+  "medications": ["IV fluids", "sumatriptan", "antiemetics"],
+  "medical_procedures": []
+}
