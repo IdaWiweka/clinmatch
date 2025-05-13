@@ -21,8 +21,7 @@ A web application for matching and annotating clinical entities in text using bo
 
 1. Clone or download this repository:
 ```bash
-git clone <repository-url>
-cd <repository-directory>
+git clone <[repository-url](https://github.com/IdaWiweka/clinmatch.git)>
 ```
 
 2. Create a virtual environment (recommended):
