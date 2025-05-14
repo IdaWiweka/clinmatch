@@ -10,8 +10,10 @@ from dotenv import load_dotenv
 from sentence_transformers import SentenceTransformer, util 
 import numpy as np
 
+# Load environment variables from .env file
 load_dotenv()
 
+# Initialize Flask application
 app = Flask(__name__)
 app.secret_key = os.getenv('SECRET_KEY', '123456')
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URI', 'sqlite:///entities.db')
@@ -21,41 +23,57 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 SEMANTIC_MATCH_THRESHOLD = 0.8  # Threshold for semantic matching (0-1)
 FUZZY_MATCH_THRESHOLD = 80     # Threshold for fuzzy matching (0-100)
 
+# Initialize SQLAlchemy database
 db = SQLAlchemy(app)
 
 # Initialize the sentence transformer model with S-PubMedBert-MS-MARCO
+# This model is optimized for biomedical text and provides better semantic matching for medical terminology
 model = SentenceTransformer('pritamdeka/S-PubMedBert-MS-MARCO')
 
+# Database Models
 class User(db.Model):
+    """User model for authentication."""
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(80), unique=True, nullable=False)
     password = db.Column(db.String(120), nullable=False)
 
 class MatchResult(db.Model):
+    """Model to store entity matching results for text annotations."""
     __tablename__ = 'match_result'
     id = db.Column(db.Integer, primary_key=True)
     text_id = db.Column(db.String(50), db.ForeignKey('text_index.text_id'), nullable=False)
     category = db.Column(db.String(80), nullable=False)
-    entities = db.Column(db.Text, nullable=False)
-    matched = db.Column(db.Text, nullable=True)
-    unmatched = db.Column(db.Text, nullable=True)
-    undetected_entity = db.Column(db.Text, nullable=True)
+    entities = db.Column(db.Text, nullable=False)  # Comma-separated list of entities
+    matched = db.Column(db.Text, nullable=True)    # Entities found in the text
+    unmatched = db.Column(db.Text, nullable=True)  # Entities not found in the text
+    undetected_entity = db.Column(db.Text, nullable=True)  # Entities in text but not in reference list
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
     text = db.relationship('TextIndex', backref='match_results')
 
+    # Ensure each user can only annotate a text+category combination once
     __table_args__ = (
         db.UniqueConstraint('user_id', 'text_id', 'category', name='unique_annotation'),
     )
 
 class TextIndex(db.Model):
+    """Model to store text documents for annotation."""
     __tablename__ = 'text_index'
     id = db.Column(db.Integer, primary_key=True)
     text_id = db.Column(db.String(50), unique=True, nullable=False)
     text = db.Column(db.Text, nullable=False)
 
+# Helper Functions
 def safe_read_jsonl(file_path):
-    """Safely read and parse JSONL file with error handling."""
+    """
+    Safely read and parse JSONL file with comprehensive error handling.
+    
+    Args:
+        file_path: Path to the JSONL file
+        
+    Returns:
+        List of parsed JSON objects or empty list on error
+    """
     try:
         with open(file_path, 'r') as f:
             return [json.loads(line) for line in f]
@@ -70,6 +88,15 @@ def safe_read_jsonl(file_path):
         return []
 
 def load_all_records_from_jsonl(file_path='database.jsonl'):
+    """
+    Load and process all records from a JSONL database file.
+    
+    Args:
+        file_path: Path to the JSONL database file
+        
+    Returns:
+        List of dictionaries with text, text_id, category, and entities
+    """
     records = []
     data = safe_read_jsonl(file_path)
     
@@ -86,8 +113,101 @@ def load_all_records_from_jsonl(file_path='database.jsonl'):
                 })
     return records
 
+def import_jsonl_to_db(file_path='database.jsonl'):
+    """
+    Import data from JSONL file to the SQL database.
+    
+    Args:
+        file_path: Path to the JSONL database file
+        
+    Returns:
+        Tuple of (success_count, error_count, messages)
+    """
+    success_count = 0
+    error_count = 0
+    messages = []
+    processed_text_ids = set()
+    
+    try:
+        data = safe_read_jsonl(file_path)
+        if not data:
+            messages.append(f"Error: Could not read data from {file_path}. Ensure the file exists and is properly formatted.")
+            return success_count, error_count, messages
+        
+        # Initial validation of file content
+        if len(data) == 0:
+            messages.append(f"Error: The file {file_path} contains no records.")
+            return success_count, error_count, messages
+            
+        # Process each record in the JSONL file
+        for i, record in enumerate(data, 1):
+            try:
+                # Validate record structure
+                if not isinstance(record, dict):
+                    error_count += 1
+                    messages.append(f"Error: Record #{i} is not a valid JSON object.")
+                    continue
+                    
+                text = record.get("text", "").strip()
+                text_id = record.get("text_id", "").strip()
+                
+                if not text or not text_id:
+                    error_count += 1
+                    messages.append(f"Error: Record #{i} is missing required 'text' or 'text_id' fields.")
+                    continue
+                
+                # Skip duplicates within the same import file
+                if text_id in processed_text_ids:
+                    messages.append(f"Skipped duplicate text_id: {text_id} in record #{i}")
+                    continue
+                    
+                processed_text_ids.add(text_id)
+                
+                # Check for category fields
+                category_count = 0
+                for key in record:
+                    if key not in ["text", "text_id"]:
+                        category_count += 1
+                
+                if category_count == 0:
+                    messages.append(f"Warning: Record #{i} (text_id: {text_id}) has no category fields.")
+                
+                # Check if text already exists
+                existing_text = TextIndex.query.filter_by(text_id=text_id).first()
+                if not existing_text:
+                    # Create new text entry
+                    text_record = TextIndex(text=text, text_id=text_id)
+                    db.session.add(text_record)
+                    db.session.flush()  # Get the ID without committing
+                    messages.append(f"Added new text: {text_id} ({len(text)} characters, {category_count} categories)")
+                    success_count += 1
+                else:
+                    # Use existing text entry
+                    messages.append(f"Text {text_id} already exists in database (skipped)")
+                
+            except Exception as e:
+                error_count += 1
+                messages.append(f"Error processing record #{i}: {str(e)}")
+        
+        # Commit all changes to the database
+        if success_count > 0:
+            db.session.commit()
+            messages.append(f"Import completed: {success_count} new records added to database.")
+        else:
+            db.session.rollback()
+            messages.append("No new records were added to the database.")
+        
+    except Exception as e:
+        db.session.rollback()
+        error_count += 1
+        messages.append(f"Error during import: {str(e)}")
+    
+    return success_count, error_count, messages
+
+# Route Handlers
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    """Handle user login with form submission."""
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
@@ -101,15 +221,96 @@ def login():
 
 @app.route('/logout')
 def logout():
+    """Handle user logout by removing session data."""
     session.pop('user_id', None)
     flash('Logged out successfully.', 'info')
     return redirect(url_for('login'))
 
+@app.route('/import_database', methods=['GET', 'POST'])
+def import_database():
+    """Handle importing data from JSONL file to the SQL database."""
+    if 'user_id' not in session:
+        return redirect(url_for('login'))
+        
+    # Check if the user is admin
+    user = User.query.get(session['user_id'])
+    if user.username != 'admin':
+        flash('Only administrators can import database files.', 'danger')
+        return redirect(url_for('index'))
+    
+    if request.method == 'POST':
+        try:
+            # Handle file upload
+            if 'file_input' not in request.files:
+                flash('No file part in the request. Please try again.', 'danger')
+                return render_template('import_database.html')
+            
+            file = request.files['file_input']
+            
+            if file.filename == '':
+                flash('No file selected. Please select a JSONL file to import.', 'danger')
+                return render_template('import_database.html')
+            
+            if not file.filename.endswith('.jsonl'):
+                flash('Invalid file format. Only .jsonl files are supported.', 'danger')
+                return render_template('import_database.html')
+            
+            # Create temp directory if it doesn't exist
+            os.makedirs('temp', exist_ok=True)
+            
+            # Save the uploaded file temporarily
+            temp_path = os.path.join('temp', file.filename)
+            file.save(temp_path)
+            
+            # Import the data
+            success_count, error_count, messages = import_jsonl_to_db(temp_path)
+            
+            # Flash summary message with appropriate styling
+            if success_count > 0:
+                if error_count == 0:
+                    flash(f'✅ Import successful! {success_count} records were added to the database.', 'success')
+                else:
+                    flash(f'⚠️ Partial import: {success_count} records imported with {error_count} errors.', 'warning')
+            else:
+                flash(f'❌ Import failed. No records were added to the database. See details below.', 'danger')
+                
+            # Organize and display detailed messages
+            success_messages = [msg for msg in messages if "Error" not in msg and "completed" not in msg]
+            error_messages = [msg for msg in messages if "Error" in msg]
+            
+            # First show successes
+            if success_messages:
+                success_list = "<ul>" + "".join([f"<li>{msg}</li>" for msg in success_messages]) + "</ul>"
+                flash(Markup(f'Successfully processed: {success_list}'), 'info')
+            
+            # Then show errors if any
+            if error_messages:
+                error_list = "<ul>" + "".join([f"<li>{msg}</li>" for msg in error_messages]) + "</ul>"
+                flash(Markup(f'Issues encountered: {error_list}'), 'danger')
+            
+            # Clean up temp file
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
+                
+            # Stay on the import page instead of redirecting
+            return render_template('import_database.html')
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            flash(Markup(f'❌ Error during import: <strong>{str(e)}</strong>'), 'danger')
+    
+    return render_template('import_database.html')
+
 def format_text_for_display(text):
     """
-    Format text for better readability by:
-    1. Preserving the original text format
-    2. Ensuring proper spacing
+    Format text for better readability in the UI.
+    
+    Args:
+        text: Raw text string
+        
+    Returns:
+        Formatted text with proper spacing and newlines
     """
     try:
         # Clean up any multiple spaces
@@ -130,6 +331,12 @@ def format_text_for_display(text):
 
 @app.route('/annotate/<int:text_id>')
 def annotate(text_id):
+    """
+    Render the annotation interface for a specific text.
+    
+    Args:
+        text_id: ID of the text to annotate
+    """
     record = TextIndex.query.get(text_id)
     if not record:
         return "Text not found.", 404
@@ -138,11 +345,15 @@ def annotate(text_id):
 
 def get_semantic_matches(text, entities, method='sentence'):
     """
-    Find matches between text and entities using either sentence transformer or fuzzy matching.
+    Find matches between text and entities using semantic or fuzzy matching.
+    
     Args:
         text: The text to search in
         entities: List of entities to find
-        method: 'sentence' for sentence transformer or 'fuzzy' for fuzzy matching
+        method: 'sentence' for semantic matching or 'fuzzy' for fuzzy string matching
+        
+    Returns:
+        List of dictionaries containing match information
     """
     try:
         print(f"\nProcessing text: {text}")
@@ -156,11 +367,11 @@ def get_semantic_matches(text, entities, method='sentence'):
         matches = []
         
         if method == 'sentence':
-            # Get embeddings for text and entities
+            # Get embeddings for text and entities using the sentence transformer model
             text_embedding = model.encode(text, convert_to_tensor=True)
             entity_embeddings = model.encode(entities, convert_to_tensor=True)
             
-            # Calculate cosine similarity
+            # Calculate cosine similarity between text and each entity
             similarities = util.pytorch_cos_sim(text_embedding, entity_embeddings)[0]
             
             print("\nDetailed similarity scores:")
@@ -218,7 +429,7 @@ def get_semantic_matches(text, entities, method='sentence'):
                         'similarity': 1.0
                     })
                 else:
-                    # Try fuzzy matching
+                    # Try fuzzy matching with sliding window approach
                     words = text.split()
                     for i in range(len(words)):
                         for j in range(i + 1, min(i + 4, len(words) + 1)):
@@ -248,10 +459,17 @@ def get_semantic_matches(text, entities, method='sentence'):
 
 @app.route('/get_text/<int:text_id>')
 def get_text(text_id):
+    """
+    API endpoint to get text content and associated entities.
+    
+    Args:
+        text_id: ID of the text to retrieve
+    """
     record = TextIndex.query.get(text_id)
     if not record:
         return jsonify({'error': 'Text not found'}), 404
 
+    # Extract entities from the JSONL database for this text
     entities = []
     with open("database.jsonl", "r") as f:
         for line in f:
@@ -274,6 +492,12 @@ def get_text(text_id):
 
 @app.route('/get_categories/<string:text_id>')
 def get_categories(text_id):
+    """
+    API endpoint to get available categories for a text and their annotation status.
+    
+    Args:
+        text_id: ID of the text to retrieve categories for
+    """
     text_record = TextIndex.query.get_or_404(text_id)
     with open('database.jsonl', 'r') as f:
         for line in f:
@@ -282,6 +506,7 @@ def get_categories(text_id):
                 categories = [k for k in record.keys() if k not in ["text", "text_id"]]
                 result_categories = []
                 for category in categories:
+                    # Check if this category has been annotated by the current user
                     match_result = MatchResult.query.filter_by(
                         user_id=session['user_id'],
                         text_id=text_record.id,
@@ -296,6 +521,13 @@ def get_categories(text_id):
 
 @app.route('/get_entities/<string:text_id>/<category>')
 def get_entities(text_id, category):
+    """
+    API endpoint to get entities for a specific text and category, with matching information.
+    
+    Args:
+        text_id: ID of the text
+        category: Category name to get entities for
+    """
     try:
         print(f"\nGetting entities for text_id: {text_id}, category: {category}")
         
@@ -306,7 +538,7 @@ def get_entities(text_id, category):
             
         print(f"Found text: {text_record.text}")
         
-        # Get matching method from query parameters
+        # Get matching method from query parameters (sentence or fuzzy)
         method = request.args.get('method', 'sentence')
         
         # Only process entities for the current text_id and category
@@ -337,13 +569,18 @@ def get_entities(text_id, category):
 
 @app.route('/')
 def index():
+    """Main application entry point showing available texts and their annotation status."""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
+    # Load all records from JSONL database
     all_records = load_all_records_from_jsonl()
+    
+    # Get all annotated text+category pairs for the current user
     annotated = MatchResult.query.filter_by(user_id=session['user_id']).all()
     annotated_map = {(r.text.text_id, r.category) for r in annotated}
 
+    # Get all texts and determine their annotation status
     texts = TextIndex.query.all()
     text_status = []
 
@@ -358,10 +595,18 @@ def index():
             'is_annotated': is_annotated
         })
 
-    return render_template('index.html', text_status=text_status)
+    # Check if user is admin to show import option
+    user = User.query.get(session['user_id'])
+    is_admin = user.username == 'admin'
+
+    return render_template('index.html', text_status=text_status, is_admin=is_admin)
 
 @app.route('/save', methods=['POST'])
 def save():
+    """
+    API endpoint to save annotation results for a text and category.
+    Handles both matched and unmatched entities.
+    """
     if 'user_id' not in session:
         return jsonify({'status': 'error', 'message': 'Not authenticated'}), 401
 
@@ -383,12 +628,14 @@ def save():
         if not all(isinstance(d, dict) for d in [entities_dict, matched_dict, unmatched_dict, undetected_entity_dict]):
             return jsonify({'status': 'error', 'message': 'Invalid data format'}), 400
 
+        # Get or create the text record
         text_record = TextIndex.query.filter_by(text_id=text_id).first()
         if not text_record:
             text_record = TextIndex(text=text, text_id=text_id)
             db.session.add(text_record)
             db.session.commit()
 
+        # Save annotation results for each category
         for category, entity_list in entities_dict.items():
             if not isinstance(entity_list, list):
                 continue
@@ -403,6 +650,7 @@ def save():
             if existing:
                 continue
 
+            # Create new annotation result
             result = MatchResult(
                 text_id=text_record.id,
                 category=category,
@@ -424,14 +672,20 @@ def save():
 
 @app.route('/review')
 def review():
+    """Display all annotation results for the current user for review."""
     if 'user_id' not in session:
         return redirect(url_for('login'))
     
+    # Get all annotation results with joined text data for efficiency
     results = MatchResult.query.options(joinedload(MatchResult.text)).filter_by(user_id=session['user_id']).all()
     return render_template('review.html', results=results)
 
 @app.route('/delete/<int:record_id>', methods=['POST'])
 def delete_record(record_id):
+    """
+    API endpoint to delete an annotation result.
+    Only allows deletion of own annotations.
+    """
     try:
         if 'user_id' not in session:
             return jsonify({'status': 'error', 'message': 'Not authenticated'}), 401
@@ -451,6 +705,7 @@ def delete_record(record_id):
 
 @app.route('/change_password', methods=['GET', 'POST'])
 def change_password():
+    """Handle user password change with current password verification."""
     if 'user_id' not in session:
         return redirect(url_for('login'))
 
@@ -474,9 +729,12 @@ def change_password():
 
     return render_template('change_password.html')
 
+# Application entry point
 if __name__ == '__main__':
     with app.app_context():
+        # Create database tables if they don't exist
         db.create_all()
+        # Create default admin user if no users exist
         if not User.query.first():
             db.session.add(User(username='admin', password=generate_password_hash('admin')))
             db.session.commit()

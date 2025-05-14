@@ -423,6 +423,9 @@
   <div class="top-bar">
     <div class="left-menu">
       <a href="{{ url_for('review') }}"><button>Saved Data</button></a>
+      {% if is_admin %}
+      <a href="{{ url_for('import_database') }}"><button style="background-color: #9b59b6;">Import Database</button></a>
+      {% endif %}
     </div>
     <h2>Clinical Entity Matcher</h2>
     <div class="right-menu">
