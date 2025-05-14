@@ -101,40 +101,69 @@ http://localhost:5000
 
 ```
 .
-├── app.py              # Main application file
-├── requirements.txt    # Python dependencies
-├── .env               # Environment variables
-├── entities.db        # SQLite database (created automatically)
-├── database.jsonl     # Sample data file
-└── templates/         # HTML templates
-    ├── index.html     # Main interface
-    ├── login.html     # Login page
-    ├── review.html    # Review page
-    └── change_password.html  # Password change page
+├── app.py                    # Main application file
+├── requirements.txt          # Python dependencies
+├── .env                      # Environment variables (create this file)
+├── database.jsonl            # Sample data file for import
+├── instance/                 # Auto-generated instance folder
+│   └── entities.db           # SQLite database (created automatically)
+└── templates/                # HTML templates
+    ├── index.html            # Main annotation interface
+    ├── login.html            # Login page
+    ├── review.html           # Annotation review page
+    ├── change_password.html  # Password change page
+    └── import_database.html  # Database import interface
 ```
 
 ## Troubleshooting
 
 1. **Database Issues**
-   - If you encounter database errors, delete the `entities.db` file and restart the application
-   - The database will be recreated automatically
+   - If you encounter database errors, check the `instance` directory for `entities.db`
+   - If needed, delete the `entities.db` file and restart the application to recreate it
+   - Make sure your `.env` file contains the correct `DATABASE_URI` setting
 
 2. **Package Installation Issues**
-   - Make sure you're using Python 3.8 or higher
+   - Make sure you're using Python 3.8 or higher: `python --version`
    - Try updating pip: `python -m pip install --upgrade pip`
+   - If you get errors with sentence-transformers, ensure you have sufficient storage space (the model is large)
    - For Windows users, you might need to install Visual C++ Build Tools for some packages
 
 3. **Model Download Issues**
-   - The first run might take longer as it downloads the sentence transformer model
+   - The first run might take longer as it downloads the S-PubMedBert-MS-MARCO model
    - Ensure you have a stable internet connection
-   - Check your firewall settings if the download fails
+   - Temporary download issues can usually be resolved by restarting the application
+   - If the model fails to download, check your firewall or proxy settings
+
+4. **Import Issues**
+   - The database import expects a specific JSONL format as shown in the `database.jsonl` file
+   - Each record must contain at least `text_id`, `text`, and one category field
+   - The application will validate the import and show error messages for invalid records
 
 ## Security Notes
 
-1. Change the default admin password immediately after first login
-2. Keep your `.env` file secure and never commit it to version control
-3. Use a strong `SECRET_KEY` in production environments
-4. Consider using a more robust database in production
+1. **Authentication**
+   - Change the default admin password immediately after first login
+   - Use a strong, unique password for your account
+   - The application stores password hashes, not actual passwords
+
+2. **Configuration**
+   - Keep your `.env` file secure and never commit it to version control
+   - Use a strong, random `SECRET_KEY` (at least a 16-character random string)
+   - For production, consider using environment variables instead of an `.env` file
+
+3. **Production Deployment**
+   - The default setup is for development only
+   - For production:
+     * Use a proper WSGI server (Gunicorn, uWSGI) instead of the Flask development server
+     * Configure HTTPS with a valid certificate
+     * Use a more robust database (PostgreSQL, MySQL) instead of SQLite
+     * Implement proper logging and monitoring
+     * Consider using a web server like Nginx or Apache as a reverse proxy
+
+4. **Data Privacy**
+   - Be mindful of the clinical data you store in the application
+   - Ensure you have appropriate permissions to use any clinical text
+   - Consider anonymizing sensitive clinical information before import
 
 ## Support
 
