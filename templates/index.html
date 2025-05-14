@@ -525,6 +525,14 @@
     return div.innerHTML;
     }
 
+    // Function to format category names
+    function formatCategoryName(categoryName) {
+      return categoryName
+        .split('_')                    // Split on underscores
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())  // Capitalize first letter of each word
+        .join(' ');                    // Join with spaces
+    }
+
     // Add event listener for matching method changes
     matchingMethods.forEach(method => {
       method.addEventListener('change', function() {
@@ -556,7 +564,8 @@
         for (let catObj of categoryData.categories) {
           let opt = document.createElement("option");
           opt.value = catObj.name;
-          opt.textContent = catObj.done ? `${catObj.name} ✅` : catObj.name;
+          const displayName = formatCategoryName(catObj.name);
+          opt.textContent = catObj.done ? `${displayName} ✅` : displayName;
           opt.disabled = catObj.done;
           categorySelect.appendChild(opt);
         }
